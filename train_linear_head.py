@@ -34,7 +34,7 @@ from retrieval_utils import retrieval_collate_fn
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 parser.add_argument('--image_path', default='sampled_data/images', type=str)
 parser.add_argument('--annotation_file', default='sampled_data/annotations.json', type=str)
-
+parser.add_argument('--use_diffusion', action='store_true')
 
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
@@ -149,8 +149,8 @@ def main_worker(gpu, ngpus_per_node, args):
     print('Length of train set:', len(train_annotations))
     print('Length of valid set:', len(valid_annotations))
 
-    train_dataset = ITMDataset(preprocess, train_annotations, args.image_path)
-    val_dataset = ITMDataset(preprocess, valid_annotations, args.image_path)
+    train_dataset = ITMDataset(preprocess, train_annotations, args.image_path, use_neg_image=args.use_diffusion)
+    val_dataset = ITMDataset(preprocess, valid_annotations, args.image_path)    #(Rulin) we don't need negative samples in validation, right?
     # train_dataset, val_dataset = None, None   # TODO: add datasets and modify the data loaders below
 
     if not torch.cuda.is_available() and not torch.backends.mps.is_available():
@@ -254,9 +254,11 @@ def main_worker(gpu, ngpus_per_node, args):
             train_sampler.set_epoch(epoch)
 
         # train for one epoch
+        print("Start training ...")
         train(train_loader, model, criterion, optimizer, epoch, args)
 
         # evaluate on validation set
+        print("Evaluating ...")
         acc1 = validate(val_loader, model, criterion, args)
         
         scheduler.step()
@@ -277,10 +279,10 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
 
     # switch to train mode
     model.train()
-    if epoch == 0:
-        for name, param in model.named_parameters():
-            if param.requires_grad:
-                print(name)
+    # if epoch == 0:
+    #     for name, param in model.named_parameters():
+    #         if param.requires_grad:
+    #             print(name)
         
     end = time.time()
     for i, inputs in enumerate(train_loader):
@@ -303,9 +305,11 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
         # compute output
         output = model(**inputs)
         logits = output.logits_per_image
-        target = torch.arange(len(logits), device=logits.device)
-        loss = criterion(logits, target)
-        # loss = criterion(output, target)
+        target_i = torch.arange(len(logits), device=logits.device)
+        image_loss = criterion(logits, target_i)
+        target_t = torch.arange(len(logits.t()), device=logits.device)
+        caption_loss = criterion(logits.t(), target_t)
+        loss = (caption_loss + image_loss) / 2.0
 
         # measure accuracy and record loss
         acc1, acc5 = accuracy(logits, target, topk=(1, 5))

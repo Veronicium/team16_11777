@@ -8,10 +8,16 @@ curl -Lb ./cookie "https://drive.google.com/uc?export=download&confirm=`awk '/do
 rm ./cookie
 ```
 
+Install requriments:
+```
+pip install -r requirements.txt
+```
+
 Train model: 
 ```
 IMAGE_PATH=/path/to/images/
 ANNOTATION_FILE=/path/to/annotations.json
 
-python train_linear_head.py --image_path $IMAGE_PATH --annotation_file $ANNOTATION_FILE
+python train_linear_head.py --image_path $IMAGE_PATH --annotation_file $ANNOTATION_FILE --use_diffusion
 ```
+`--use_diffusion`: use Stable Diffusion to generate negative image samples.

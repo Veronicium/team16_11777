@@ -1,0 +1,6 @@
+diffusers 
+transformers 
+scipy 
+datasets
+accelerate
+diffusers[torch]
