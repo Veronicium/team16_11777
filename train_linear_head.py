@@ -150,8 +150,7 @@ def main_worker(gpu, ngpus_per_node, args):
     print('Length of valid set:', len(valid_annotations))
 
     train_dataset = ITMDataset(preprocess, train_annotations, args.image_path, use_neg_image=args.use_diffusion)
-    val_dataset = ITMDataset(preprocess, valid_annotations, args.image_path)    #(Rulin) we don't need negative samples in validation, right?
-    # train_dataset, val_dataset = None, None   # TODO: add datasets and modify the data loaders below
+    val_dataset = ITMDataset(preprocess, valid_annotations, args.image_path, use_neg_image=args.use_diffusion)    #(Rulin) do we need negative samples in validation?
 
     if not torch.cuda.is_available() and not torch.backends.mps.is_available():
         print('using CPU, this will be slow')
@@ -270,11 +269,13 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
-    top1 = AverageMeter('Acc@1', ':6.2f')
-    top5 = AverageMeter('Acc@5', ':6.2f')
+    top1 = AverageMeter('Acc@1(Img)', ':6.2f')
+    top5 = AverageMeter('Acc@5(Img)', ':6.2f')
+    top1_t = AverageMeter('Acc@1(Cap)', ':6.2f')
+    top5_t = AverageMeter('Acc@5(Cap)', ':6.2f')
     progress = ProgressMeter(
         len(train_loader),
-        [batch_time, data_time, losses, top1, top5],
+        [batch_time, data_time, losses, top1, top5, top1_t, top5_t],
         prefix="Epoch: [{}]".format(epoch))
 
     # switch to train mode
@@ -305,17 +306,22 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
         # compute output
         output = model(**inputs)
         logits = output.logits_per_image
-        target_i = torch.arange(len(logits), device=logits.device)
-        image_loss = criterion(logits, target_i)
+        target = torch.arange(len(logits), device=logits.device)
+        image_loss = criterion(logits, target)
         target_t = torch.arange(len(logits.t()), device=logits.device)
         caption_loss = criterion(logits.t(), target_t)
         loss = (caption_loss + image_loss) / 2.0
 
         # measure accuracy and record loss
-        acc1, acc5 = accuracy(logits, target, topk=(1, 5))
         losses.update(loss.item(), logits.size(0))
+
+        acc1, acc5 = accuracy(logits, target, topk=(1, 5))
         top1.update(acc1[0], logits.size(0))
         top5.update(acc5[0], logits.size(0))
+        
+        acc1, acc5 = accuracy(logits.t(), target_t, topk=(1, 5))
+        top1_t.update(acc1[0], logits.size(0))
+        top5_t.update(acc5[0], logits.size(0))
 
         # compute gradient and do SGD step
         optimizer.zero_grad()
@@ -349,17 +355,25 @@ def validate(val_loader, model, criterion, args):
                 # if torch.cuda.is_available():
                 #     target = target.cuda(args.gpu, non_blocking=True)
 
-                # compute output
+                # compute output (image_loss)
                 output = model(**inputs)
                 logits = output.logits_per_image
                 target = torch.arange(len(logits), device=logits.device)
-                loss = criterion(logits, target)
+                image_loss = criterion(logits, target)
+                target_t = torch.arange(len(logits.t()), device=logits.device)
+                caption_loss = criterion(logits.t(), target_t)
+                loss = (caption_loss + image_loss) / 2.0
 
                 # measure accuracy and record loss
-                acc1, acc5 = accuracy(logits, target, topk=(1, 5))
                 losses.update(loss.item(), logits.size(0))
+
+                acc1, acc5 = accuracy(logits, target, topk=(1, 5))
                 top1.update(acc1[0], logits.size(0))
                 top5.update(acc5[0], logits.size(0))
+
+                acc1, acc5 = accuracy(logits.t(), target_t, topk=(1, 5))
+                top1_t.update(acc1[0], logits.size(0))
+                top5_t.update(acc5[0], logits.size(0))
 
                 # measure elapsed time
                 batch_time.update(time.time() - end)
@@ -370,11 +384,13 @@ def validate(val_loader, model, criterion, args):
 
     batch_time = AverageMeter('Time', ':6.3f', Summary.NONE)
     losses = AverageMeter('Loss', ':.4e', Summary.NONE)
-    top1 = AverageMeter('Acc@1', ':6.2f', Summary.AVERAGE)
-    top5 = AverageMeter('Acc@5', ':6.2f', Summary.AVERAGE)
+    top1 = AverageMeter('Acc@1(Img)', ':6.2f', Summary.AVERAGE)
+    top5 = AverageMeter('Acc@5(Img)', ':6.2f', Summary.AVERAGE)
+    top1_t = AverageMeter('Acc@1(Cap)', ':6.2f', Summary.AVERAGE)
+    top5_t = AverageMeter('Acc@5(Cap)', ':6.2f', Summary.AVERAGE)
     progress = ProgressMeter(
         len(val_loader) + (args.distributed and (len(val_loader.sampler) * args.world_size < len(val_loader.dataset))),
-        [batch_time, losses, top1, top5],
+        [batch_time, losses, top1, top5, top1_t, top5_t],
         prefix='Test: ')
 
     # switch to evaluate mode
@@ -384,6 +400,8 @@ def validate(val_loader, model, criterion, args):
     if args.distributed:
         top1.all_reduce()
         top5.all_reduce()
+        top1_t.all_reduce()
+        top5_t.all_reduce()
 
     if args.distributed and (len(val_loader.sampler) * args.world_size < len(val_loader.dataset)):
         aux_val_dataset = Subset(val_loader.dataset,
