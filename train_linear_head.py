@@ -306,22 +306,23 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
         # compute output
         output = model(**inputs)
         logits = output.logits_per_image
-        target = torch.arange(len(logits), device=logits.device)
-        image_loss = criterion(logits, target)
-        target_t = torch.arange(len(logits.t()), device=logits.device)
-        caption_loss = criterion(logits.t(), target_t)
+        bs = min(logits.size(0), logits.size(1))
+
+        target = torch.arange(bs, device=logits.device)
+        image_loss = criterion(logits[:bs], target)
+        caption_loss = criterion(logits.t()[:bs], target)
         loss = (caption_loss + image_loss) / 2.0
 
         # measure accuracy and record loss
-        losses.update(loss.item(), logits.size(0))
+        losses.update(loss.item(), bs)
 
-        acc1, acc5 = accuracy(logits, target, topk=(1, 5))
-        top1.update(acc1[0], logits.size(0))
-        top5.update(acc5[0], logits.size(0))
+        acc1, acc5 = accuracy(logits[:bs], target, topk=(1, 5))
+        top1.update(acc1[0], bs)
+        top5.update(acc5[0], bs)
         
-        acc1, acc5 = accuracy(logits.t(), target_t, topk=(1, 5))
-        top1_t.update(acc1[0], logits.size(0))
-        top5_t.update(acc5[0], logits.size(0))
+        acc1, acc5 = accuracy(logits.t()[:bs], target, topk=(1, 5))
+        top1_t.update(acc1[0], bs)
+        top5_t.update(acc5[0], bs)
 
         # compute gradient and do SGD step
         optimizer.zero_grad()
@@ -358,22 +359,23 @@ def validate(val_loader, model, criterion, args):
                 # compute output (image_loss)
                 output = model(**inputs)
                 logits = output.logits_per_image
-                target = torch.arange(len(logits), device=logits.device)
-                image_loss = criterion(logits, target)
-                target_t = torch.arange(len(logits.t()), device=logits.device)
-                caption_loss = criterion(logits.t(), target_t)
+                bs = min(logits.size(0), logits.size(1))
+
+                target = torch.arange(bs, device=logits.device)
+                image_loss = criterion(logits[:bs], target)
+                caption_loss = criterion(logits.t()[:bs], target)
                 loss = (caption_loss + image_loss) / 2.0
 
                 # measure accuracy and record loss
-                losses.update(loss.item(), logits.size(0))
+                losses.update(loss.item(), bs)
 
-                acc1, acc5 = accuracy(logits, target, topk=(1, 5))
-                top1.update(acc1[0], logits.size(0))
-                top5.update(acc5[0], logits.size(0))
-
-                acc1, acc5 = accuracy(logits.t(), target_t, topk=(1, 5))
-                top1_t.update(acc1[0], logits.size(0))
-                top5_t.update(acc5[0], logits.size(0))
+                acc1, acc5 = accuracy(logits[:bs], target, topk=(1, 5))
+                top1.update(acc1[0], bs)
+                top5.update(acc5[0], bs)
+                
+                acc1, acc5 = accuracy(logits.t()[:bs], target, topk=(1, 5))
+                top1_t.update(acc1[0], bs)
+                top5_t.update(acc5[0], bs)
 
                 # measure elapsed time
                 batch_time.update(time.time() - end)
@@ -503,9 +505,8 @@ class ProgressMeter(object):
 def accuracy(output, target, topk=(1,)):
     """Computes the accuracy over the k top predictions for the specified values of k"""
     with torch.no_grad():
-        maxk = max(topk)
+        maxk = min(max(topk), output.size(0))
         batch_size = target.size(0)
-
         _, pred = output.topk(maxk, 1, True, True)
         pred = pred.t()
         correct = pred.eq(target.view(1, -1).expand_as(pred))
