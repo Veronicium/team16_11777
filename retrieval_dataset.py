@@ -36,8 +36,8 @@ class ITMDataset(Dataset):
         if self.use_neg_image:
             # only generate an neg image for the first neg caption to reduce computations
             neg_images = [self.diffusion_model(cap, guidance_scale=12).images[0] for cap in neg_captions]
-            print(image, neg_images[0])
-            print(caption, neg_captions[0])
+            # print(image, neg_images[0])
+            # print(caption, neg_captions[0])
             image.save('pos.png')
             neg_images[0].save('neg.png')
             return image, caption, neg_captions, neg_images
