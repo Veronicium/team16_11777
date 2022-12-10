@@ -7,6 +7,8 @@ curl -c ./cookie -s -L "https://drive.google.com/uc?export=download&id=${fileid}
 curl -Lb ./cookie "https://drive.google.com/uc?export=download&confirm=`awk '/download/ {print $NF}' ./cookie`&id=${fileid}" -o hard_negs.zip
 rm ./cookie
 ```
+* train file id: 1c87uMh2Mk3hsU0y7lt85t2WKSTgNAycW
+* val file id: 1rdM6sOK41fhXAdPWjYHkNO2LNhlF4g2Y
 
 Install requriments:
 ```
