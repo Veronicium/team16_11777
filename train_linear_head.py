@@ -32,8 +32,10 @@ from retrieval_utils import retrieval_collate_fn
 #     and callable(models.__dict__[name]))
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
-parser.add_argument('--image_path', default='sampled_data/images', type=str)
-parser.add_argument('--annotation_file', default='sampled_data/annotations.json', type=str)
+parser.add_argument('--train-image-path', default='sampled_train_data/images', type=str)
+parser.add_argument('--train-annotation-file', default='sampled_train_data/annotations.json', type=str)
+parser.add_argument('--val-image-path', default='sampled_val_data/images', type=str)
+parser.add_argument('--val-annotation-file', default='sampled_val_data/annotations.json', type=str)
 parser.add_argument('--use_diffusion', action='store_true')
 
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
@@ -82,6 +84,8 @@ parser.add_argument('--multiprocessing-distributed', action='store_true',
 parser.add_argument('--dummy', action='store_true', help="use fake data to benchmark")
 
 best_acc1 = 0
+
+# torch.multiprocessing.set_start_method('spawn')
 
 
 def main():
@@ -142,15 +146,14 @@ def main_worker(gpu, ngpus_per_node, args):
 
     model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
     preprocess = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-
-    annotations = json.load(open(args.annotation_file, 'r'))
-    train_annotations = [x for x in annotations if x['split'] == 'train']
-    valid_annotations = [x for x in annotations if x['split'] == 'val']
+    
+    train_annotations = json.load(open(args.train_annotation_file))
+    valid_annotations = json.load(open(args.val_annotation_file))
     print('Length of train set:', len(train_annotations))
     print('Length of valid set:', len(valid_annotations))
 
-    train_dataset = ITMDataset(preprocess, train_annotations, args.image_path, use_neg_image=args.use_diffusion)
-    val_dataset = ITMDataset(preprocess, valid_annotations, args.image_path, use_neg_image=args.use_diffusion)    #(Rulin) do we need negative samples in validation?
+    train_dataset = ITMDataset(preprocess, train_annotations, args.train_image_path, use_neg_image=args.use_diffusion)
+    val_dataset = ITMDataset(preprocess, valid_annotations, args.val_image_path, use_neg_image=args.use_diffusion)    #(Rulin) do we need negative samples in validation?
 
     if not torch.cuda.is_available() and not torch.backends.mps.is_available():
         print('using CPU, this will be slow')
