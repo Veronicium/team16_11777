@@ -18,12 +18,14 @@ class ITMDataset(Dataset):
         self.use_neg_image = use_neg_image
         
         self.neg_img_dir = os.path.join(self.image_path, 'neg_images')
-        if use_neg_image and not os.path.exists(self.neg_img_dir):
+        print(use_neg_image)
+        if use_neg_image: #and not os.path.exists(self.neg_img_dir):
             from diffusers import StableDiffusionPipeline
             model_id = "CompVis/stable-diffusion-v1-4"
             print(f"Loading diffusion model: {model_id}")
             # Increasing guidance makes generation follow more closely to the prompt
-            self.diffusion_model = StableDiffusionPipeline.from_pretrained(model_id, use_auth_token=True)
+            self.diffusion_model = StableDiffusionPipeline.from_pretrained(model_id, torch_dtype=torch.float16, revision="fp16")
+            self.diffusion_model = self.diffusion_model.to(1)
         
     def __len__(self):
         return len(self.annotations)
@@ -31,8 +33,8 @@ class ITMDataset(Dataset):
     def __getitem__(self, idx):
         annotation_dict = self.annotations[idx]
         file_name = annotation_dict['file_name']
-        caption = annotation_dict['caption']
-        neg_captions = annotation_dict['neg_captions']
+        caption = annotation_dict['caption'].lower()
+        neg_captions = [cap.lower() for cap in annotation_dict['neg_captions']]
         image = Image.open(self.image_path+"/"+file_name)
 
         if self.use_neg_image:
