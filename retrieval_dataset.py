@@ -31,7 +31,7 @@ class ITMDataset(Dataset):
         if self.use_neg_image:
             neg_images = []
             for i in range(len(neg_captions)):
-                neg_img_file = os.path.join(self.neg_img_dir, f'{i}.jpg')
+                neg_img_file = os.path.join(os.path.join(self.neg_img_dir, file_name.split('.jpg')[0]), f'{i}.jpg')
                 neg_img = Image.open(neg_img_file)
                 neg_images.append(neg_img)
             return image, caption, neg_captions, neg_images
