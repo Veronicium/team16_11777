@@ -267,6 +267,9 @@ def main_worker(gpu, ngpus_per_node, args):
 
         best_acc1 = max(acc1, best_acc1)
 
+        save_checkpoint(model.text_projection.state_dict(), filename='text_projection.pth.tar')
+        save_checkpoint(model.visual_projection.state_dict(), filename='visual_projection.pth.tar')
+
 
 def train(train_loader, model, criterion, optimizer, epoch, args):
     batch_time = AverageMeter('Time', ':6.3f')
